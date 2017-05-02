@@ -16,7 +16,7 @@ import {
 import Button from 'react-native-button';
 
 import {RequestStatus} from 'mattermost-redux/constants';
-import {Client4} from 'mattermost-redux/client';
+import {Client, Client4} from 'mattermost-redux/client';
 
 import ErrorText from 'app/components/error_text';
 import FormattedText from 'app/components/formatted_text';
@@ -24,6 +24,8 @@ import FormattedText from 'app/components/formatted_text';
 import TextInputWithLocalizedPlaceholder from 'app/components/text_input_with_localized_placeholder';
 import {GlobalStyles} from 'app/styles';
 import {isValidUrl, stripTrailingSlashes} from 'app/utils/url';
+
+import urlParse from 'url-parse';
 
 import logo from 'assets/images/logo.png';
 
@@ -77,13 +79,15 @@ export default class SelectServer extends PureComponent {
     };
 
     onClick = async () => {
-        const url = this.props.serverUrl;
+        const preUrl = urlParse(this.props.serverUrl, true);
+        const url = preUrl.protocol + '//' + preUrl.host;
         let error = null;
 
         Keyboard.dismiss();
 
         if (isValidUrl(url)) {
             Client4.setUrl(stripTrailingSlashes(url));
+            Client.setUrl(stripTrailingSlashes(url));
             await this.props.actions.getPing();
         } else {
             error = {

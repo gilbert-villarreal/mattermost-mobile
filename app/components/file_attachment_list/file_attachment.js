@@ -8,11 +8,10 @@ import React, {
 
 import {
     Text,
+    TouchableOpacity,
     View,
     StyleSheet
 } from 'react-native';
-
-import Icon from 'react-native-vector-icons/FontAwesome';
 
 import {changeOpacity, makeStyleSheetFromTheme} from 'app/utils/theme';
 import * as Utils from 'mattermost-redux/utils/file_utils.js';
@@ -25,15 +24,26 @@ export default class FileAttachment extends PureComponent {
         addFileToFetchCache: PropTypes.func.isRequired,
         fetchCache: PropTypes.object.isRequired,
         file: PropTypes.object.isRequired,
+        onInfoPress: PropTypes.func,
+        onPreviewPress: PropTypes.func,
         theme: PropTypes.object.isRequired
     };
+
+    static defaultProps = {
+        onInfoPress: () => true,
+        onPreviewPress: () => true
+    }
 
     renderFileInfo() {
         const {file, theme} = this.props;
         const style = getStyleSheet(theme);
 
+        if (!file.id) {
+            return null;
+        }
+
         return (
-            <View style={style.fileInfoContainer}>
+            <View>
                 <Text
                     numberOfLines={4}
                     style={style.fileName}
@@ -41,11 +51,6 @@ export default class FileAttachment extends PureComponent {
                     {file.name.trim()}
                 </Text>
                 <View style={style.fileDownloadContainer}>
-                    <Icon
-                        name='download'
-                        size={16}
-                        style={style.downloadIcon}
-                    />
                     <Text style={style.fileInfo}>
                         {`${file.extension.toUpperCase()} ${Utils.getFormattedFileSize(file)}`}
                     </Text>
@@ -54,12 +59,16 @@ export default class FileAttachment extends PureComponent {
         );
     }
 
+    handlePreviewPress = () => {
+        this.props.onPreviewPress(this.props.file);
+    }
+
     render() {
         const {file, theme} = this.props;
         const style = getStyleSheet(theme);
 
         let fileAttachmentComponent;
-        if (file.has_preview_image) {
+        if (file.has_preview_image || file.loading) {
             fileAttachmentComponent = (
                 <FileAttachmentImage
                     addFileToFetchCache={this.props.addFileToFetchCache}
@@ -79,8 +88,15 @@ export default class FileAttachment extends PureComponent {
 
         return (
             <View style={style.fileWrapper}>
-                {fileAttachmentComponent}
-                {this.renderFileInfo()}
+                <TouchableOpacity onPress={this.handlePreviewPress}>
+                    {fileAttachmentComponent}
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={this.props.onInfoPress}
+                    style={style.fileInfoContainer}
+                >
+                    {this.renderFileInfo()}
+                </TouchableOpacity>
             </View>
         );
     }

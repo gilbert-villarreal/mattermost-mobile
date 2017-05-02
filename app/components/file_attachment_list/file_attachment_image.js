@@ -13,7 +13,7 @@ import {
     StyleSheet
 } from 'react-native';
 
-import {Client4} from 'mattermost-redux/client';
+import {Client} from 'mattermost-redux/client';
 
 import imageIcon from 'assets/images/icons/image.png';
 
@@ -24,8 +24,6 @@ const IMAGE_SIZE = {
     Preview: 'preview',
     Thumbnail: 'thumbnail'
 };
-
-const IMAGE_HEADERS = Client4.getOptions().headers;
 
 export default class FileAttachmentImage extends PureComponent {
     static propTypes = {
@@ -103,14 +101,18 @@ export default class FileAttachmentImage extends PureComponent {
     handleGetImageURL = () => {
         const {file, imageSize} = this.props;
 
+        if (file.localPath && this.state.retry === 0) {
+            return file.localPath;
+        }
+
         switch (imageSize) {
         case IMAGE_SIZE.Fullsize:
-            return Client4.getFileUrl(file.id, this.state.timestamp);
+            return Client.getFileUrl(file.id, this.state.timestamp);
         case IMAGE_SIZE.Preview:
-            return Client4.getFilePreviewUrl(file.id, this.state.timestamp);
+            return Client.getFilePreviewUrl(file.id, this.state.timestamp);
         case IMAGE_SIZE.Thumbnail:
         default:
-            return Client4.getFileThumbnailUrl(file.id, this.state.timestamp);
+            return Client.getFileThumbnailUrl(file.id, this.state.timestamp);
         }
     };
 
@@ -133,7 +135,9 @@ export default class FileAttachmentImage extends PureComponent {
         if (this.state.retry === 4) {
             source = imageIcon;
         } else if (file.id) {
-            source = {uri: this.handleGetImageURL(), headers: IMAGE_HEADERS};
+            source = {uri: this.handleGetImageURL()};
+        } else if (file.failed) {
+            source = {uri: file.localPath};
         }
 
         const isInFetchCache = fetchCache[source.uri];
@@ -156,10 +160,10 @@ export default class FileAttachmentImage extends PureComponent {
                         {...imageComponentLoaders}
                     />
                 </AnimatedView>
-                {(!isInFetchCache && (file.loading || this.state.requesting)) &&
-                    <View style={[style.loaderContainer, {backgroundColor: loadingBackgroundColor}]}>
-                        <ActivityIndicator size='small'/>
-                    </View>
+                {(!isInFetchCache && !file.failed && (file.loading || this.state.requesting)) &&
+                <View style={[style.loaderContainer, {backgroundColor: loadingBackgroundColor}]}>
+                    <ActivityIndicator size='small'/>
+                </View>
                 }
             </View>
         );

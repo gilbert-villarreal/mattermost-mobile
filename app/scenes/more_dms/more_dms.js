@@ -20,7 +20,7 @@ import {createMembersSections, loadingText, renderMemberRow} from 'app/utils/mem
 import {makeStyleSheetFromTheme, changeOpacity} from 'app/utils/theme';
 
 import {General, RequestStatus} from 'mattermost-redux/constants';
-import {filterProfiles} from 'mattermost-redux/utils/user_utils';
+import {filterProfilesMatchingTerm} from 'mattermost-redux/utils/user_utils';
 
 class MoreDirectMessages extends PureComponent {
     static propTypes = {
@@ -86,7 +86,7 @@ class MoreDirectMessages extends PureComponent {
             this.setState({profiles, showNoResults: true});
         } else if (this.state.searching &&
             nextProps.searchRequest.status === RequestStatus.SUCCESS) {
-            const results = filterProfiles(nextProps.profiles, this.state.term);
+            const results = filterProfilesMatchingTerm(nextProps.profiles, this.state.term);
             this.setState({profiles: results, showNoResults: true});
         }
     }
@@ -202,9 +202,9 @@ class MoreDirectMessages extends PureComponent {
                             placeholder={formatMessage({id: 'search_bar.search', defaultMesage: 'Search'})}
                             height={27}
                             fontSize={14}
-                            textColor={this.props.theme.centerChannelColor}
+                            textColor={changeOpacity('#000', 0.5)}
                             hideBackground={true}
-                            textFieldBackgroundColor={changeOpacity(this.props.theme.centerChannelColor, 0.07)}
+                            textFieldBackgroundColor={'#fff'}
                             onChange={this.searchProfiles}
                             onSearchButtonPress={this.onSearchButtonPress}
                             onCancelButtonPress={this.cancelSearch}

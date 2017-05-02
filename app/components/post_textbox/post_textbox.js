@@ -13,7 +13,7 @@ import {
     Text
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import ImagePicker from 'react-native-image-crop-picker';
+import ImagePicker from 'react-native-image-picker';
 import {injectIntl, intlShape} from 'react-intl';
 import {RequestStatus} from 'mattermost-redux/constants';
 
@@ -32,6 +32,7 @@ class PostTextbox extends PureComponent {
         actions: PropTypes.shape({
             closeModal: PropTypes.func.isRequired,
             createPost: PropTypes.func.isRequired,
+            handleClearFiles: PropTypes.func.isRequired,
             handleRemoveLastFile: PropTypes.func.isRequired,
             handleUploadFiles: PropTypes.func.isRequired,
             showOptionsModal: PropTypes.func.isRequired,
@@ -97,7 +98,10 @@ class PostTextbox extends PureComponent {
             );
         }
 
-        const canSend = ((valueLength > 0 && valueLength <= MAX_MESSAGE_LENGTH) || files.length > 0) && uploadFileRequestStatus !== RequestStatus.STARTED;
+        const canSend = (
+                (valueLength > 0 && valueLength <= MAX_MESSAGE_LENGTH) ||
+                files.filter((f) => !f.failed).length > 0
+            ) && uploadFileRequestStatus !== RequestStatus.STARTED;
         this.setState({
             canSend
         });
@@ -133,11 +137,38 @@ class PostTextbox extends PureComponent {
         return false;
     };
 
-    sendMessage = () => {
+    handleSendMessage = () => {
         if (!this.state.canSend) {
             return;
         }
 
+        const hasFailedImages = this.props.files.some((f) => f.failed);
+        if (hasFailedImages) {
+            const {intl} = this.props;
+
+            Alert.alert(
+                intl.formatMessage({
+                    id: 'mobile.post_textbox.uploadFailedTitle',
+                    defaultMessage: 'Attachment failure'
+                }),
+                intl.formatMessage({
+                    id: 'mobile.post_textbox.uploadFailedDesc',
+                    defaultMessage: 'Some attachments failed to upload to the server, Are you sure you want to post the message?'
+                }),
+                [{
+                    text: intl.formatMessage({id: 'mobile.channel_info.alertNo', defaultMessage: 'No'})
+                }, {
+                    text: intl.formatMessage({id: 'mobile.channel_info.alertYes', defaultMessage: 'Yes'}),
+                    onPress: this.sendMessage
+                }],
+            );
+        } else {
+            this.sendMessage();
+        }
+    };
+
+    sendMessage = () => {
+        const files = this.props.files.filter((f) => !f.failed);
         const post = {
             user_id: this.props.currentUserId,
             channel_id: this.props.channelId,
@@ -146,8 +177,11 @@ class PostTextbox extends PureComponent {
             message: this.props.value
         };
 
-        this.props.actions.createPost(post, this.props.files);
+        this.props.actions.createPost(post, files);
         this.handleTextChange('');
+        if (this.props.files.length) {
+            this.props.actions.handleClearFiles(this.props.channelId, this.props.rootId);
+        }
     };
 
     handleTextChange = (text) => {
@@ -172,33 +206,42 @@ class PostTextbox extends PureComponent {
         this.autocomplete = c;
     };
 
-    attachFileFromCamera = async () => {
-        try {
-            this.props.actions.closeModal();
-            const image = await ImagePicker.openCamera({
-                compressImageQuality: 0.5
-            });
+    attachFileFromCamera = () => {
+        this.props.actions.closeModal();
 
-            this.uploadFiles([image]);
-        } catch (error) {
-            // If user cancels it's considered
-            // an error and we have to catch it.
-        }
+        const options = {
+            quality: 0.5,
+            noData: true,
+            storageOptions: {
+                cameraRoll: true,
+                waitUntilSaved: true
+            }
+        };
+
+        ImagePicker.launchCamera(options, (response) => {
+            if (response.error) {
+                return;
+            }
+
+            this.uploadFiles([response]);
+        });
     };
 
-    attachFileFromLibrary = async () => {
-        try {
-            this.props.actions.closeModal();
-            const images = await ImagePicker.openPicker({
-                multiple: true,
-                compressImageQuality: 0.5
-            });
+    attachFileFromLibrary = () => {
+        this.props.actions.closeModal();
 
-            this.uploadFiles(images);
-        } catch (error) {
-            // If user cancels it's considered
-            // an error and we have to catch it.
-        }
+        const options = {
+            quality: 0.5,
+            noData: true
+        };
+
+        ImagePicker.launchImageLibrary(options, (response) => {
+            if (response.error) {
+                return;
+            }
+
+            this.uploadFiles([response]);
+        });
     };
 
     uploadFiles = (images) => {
@@ -298,7 +341,7 @@ class PostTextbox extends PureComponent {
                     onChangeText={this.props.onChangeText}
                     rootId={this.props.rootId}
                 />
-                <View style={{backgroundColor: theme.centerChannelBg}}>
+                <View style={{backgroundColor: theme.centerChannelBg, elevation: 5}}>
                     <View
                         style={style.inputWrapper}
                     >
@@ -308,7 +351,7 @@ class PostTextbox extends PureComponent {
                         >
                             <Icon
                                 size={30}
-                                style={{marginTop: 2}}
+                                style={style.attachIcon}
                                 color={changeOpacity(theme.centerChannelColor, 0.9)}
                                 name='md-add'
                             />
@@ -322,14 +365,14 @@ class PostTextbox extends PureComponent {
                                 onContentSizeChange={this.handleContentSizeChange}
                                 placeholder={placeholder}
                                 placeholderTextColor={changeOpacity('#000', 0.5)}
-                                onSubmitEditing={this.sendMessage}
+                                onSubmitEditing={this.handleSendMessage}
                                 multiline={true}
                                 underlineColorAndroid='transparent'
                                 style={[style.input, {height: Math.min(this.state.contentHeight, MAX_CONTENT_HEIGHT)}]}
                             />
                             {this.state.canSend &&
                                 <TouchableOpacity
-                                    onPress={this.sendMessage}
+                                    onPress={this.handleSendMessage}
                                     style={style.sendButton}
                                 >
                                     <PaperPlane
@@ -379,6 +422,16 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
             borderTopWidth: 1,
             borderTopColor: changeOpacity(theme.centerChannelColor, 0.20)
         },
+        attachIcon: {
+            ...Platform.select({
+                ios: {
+                    marginTop: 2
+                },
+                android: {
+                    marginTop: 0
+                }
+            })
+        },
         sendButton: {
             backgroundColor: theme.buttonBg,
             borderRadius: 18,
@@ -390,7 +443,7 @@ const getStyleSheet = makeStyleSheetFromTheme((theme) => {
                     marginBottom: 5
                 },
                 android: {
-                    marginBottom: 3.5
+                    marginBottom: 6.5
                 }
             }),
             alignItems: 'center',

@@ -10,7 +10,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import Font from 'react-native-vector-icons/Ionicons';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {RequestStatus} from 'mattermost-redux/constants';
 
 import FileAttachmentImage from 'app/components/file_attachment_list/file_attachment_image';
@@ -22,8 +22,8 @@ export default class FileUploadPreview extends PureComponent {
     static propTypes = {
         actions: PropTypes.shape({
             addFileToFetchCache: PropTypes.func.isRequired,
-            handleClearFiles: PropTypes.func.isRequired,
-            handleRemoveFile: PropTypes.func.isRequired
+            handleRemoveFile: PropTypes.func.isRequired,
+            retryFileUpload: PropTypes.func.isRequired
         }).isRequired,
         channelId: PropTypes.string.isRequired,
         channelIsLoading: PropTypes.bool,
@@ -35,11 +35,13 @@ export default class FileUploadPreview extends PureComponent {
         uploadFileRequestStatus: PropTypes.string.isRequired
     };
 
-    componentWillReceiveProps(nextProps) {
-        if (this.props.createPostRequestStatus === RequestStatus.STARTED && nextProps.createPostRequestStatus === RequestStatus.SUCCESS) {
-            this.props.actions.handleClearFiles(this.props.channelId, this.props.rootId);
+    handleRetryFileUpload = (file) => {
+        if (!file.failed) {
+            return;
         }
-    }
+
+        this.props.actions.retryFileUpload(file, this.props.rootId);
+    };
 
     buildFilePreviews = () => {
         return this.props.files.map((file) => {
@@ -48,16 +50,30 @@ export default class FileUploadPreview extends PureComponent {
                     key={file.clientId}
                     style={style.preview}
                 >
-                    <FileAttachmentImage
-                        addFileToFetchCache={this.props.actions.addFileToFetchCache}
-                        fetchCache={this.props.fetchCache}
-                        file={file}
-                    />
+                    <View style={style.previewShadow}>
+                        <FileAttachmentImage
+                            addFileToFetchCache={this.props.actions.addFileToFetchCache}
+                            fetchCache={this.props.fetchCache}
+                            file={file}
+                        />
+                        {file.failed &&
+                        <TouchableOpacity
+                            style={style.failed}
+                            onPress={() => this.handleRetryFileUpload(file)}
+                        >
+                            <Icon
+                                name='md-refresh'
+                                size={50}
+                                color='#fff'
+                            />
+                        </TouchableOpacity>
+                        }
+                    </View>
                     <TouchableOpacity
                         style={style.removeButtonWrapper}
                         onPress={() => this.props.actions.handleRemoveFile(file.clientId, this.props.channelId, this.props.rootId)}
                     >
-                        <Font
+                        <Icon
                             name='md-close'
                             color='#fff'
                             size={18}
@@ -75,14 +91,16 @@ export default class FileUploadPreview extends PureComponent {
         }
 
         return (
-            <KeyboardLayout style={style.container}>
-                <ScrollView
-                    horizontal={true}
-                    style={style.scrollView}
-                    contentContainerStyle={[style.scrollViewContent, {marginBottom: this.props.inputHeight}]}
-                >
-                    {this.buildFilePreviews()}
-                </ScrollView>
+            <KeyboardLayout>
+                <View style={[style.container]}>
+                    <ScrollView
+                        horizontal={true}
+                        style={style.scrollView}
+                        contentContainerStyle={style.scrollViewContent}
+                    >
+                        {this.buildFilePreviews()}
+                    </ScrollView>
+                </View>
             </KeyboardLayout>
         );
     }
@@ -97,18 +115,35 @@ const style = StyleSheet.create({
         position: 'absolute',
         width: '100%'
     },
+    failed: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        position: 'absolute',
+        height: '100%',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
     preview: {
         justifyContent: 'flex-end',
         height: 115,
-        width: 115,
+        width: 115
+    },
+    previewShadow: {
+        height: 100,
+        width: 100,
         elevation: 10,
-        shadowColor: '#000',
-        shadowOpacity: 0.5,
-        shadowRadius: 4,
-        shadowOffset: {
-            width: 0,
-            height: 0
-        }
+        ...Platform.select({
+            ios: {
+                backgroundColor: '#fff',
+                shadowColor: '#000',
+                shadowOpacity: 0.5,
+                shadowRadius: 4,
+                shadowOffset: {
+                    width: 0,
+                    height: 0
+                }
+            }
+        })
     },
     removeButtonIcon: Platform.select({
         ios: {
@@ -123,6 +158,7 @@ const style = StyleSheet.create({
         justifyContent: 'center',
         position: 'absolute',
         overflow: 'hidden',
+        elevation: 11,
         top: 7,
         right: 7,
         width: 24,
@@ -134,7 +170,7 @@ const style = StyleSheet.create({
     },
     scrollView: {
         flex: 1,
-        marginBottom: 24
+        marginBottom: 12
     },
     scrollViewContent: {
         alignItems: 'flex-end',
